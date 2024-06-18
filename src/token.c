@@ -5,7 +5,7 @@ TokenMap hmTokens;
 void
 initTokenHashMap()
 {
-    hmTokens = TokenMapCreate(16);
+    hmTokens = TokenMapCreate(64); /* no collisions with 64 */
 
     TokenMapInsert(&hmTokens, (StrToken){.str = "const", .token = TOK_CONST});
     TokenMapInsert(&hmTokens, (StrToken){.str = "var", .token = TOK_VAR});
