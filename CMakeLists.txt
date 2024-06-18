@@ -32,9 +32,14 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
     target_compile_options(pl0c PRIVATE -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function)
 endif()
 
-find_library(LIB_BSD bsd REQUIRED)
-if (LIB_BSD)
-    target_link_options(pl0c PRIVATE ${LIB_BSD})
+cmake_host_system_information(RESULT OS_NAME QUERY OS_NAME)
+message(STATUS "OS_NAME: '${OS_NAME}'")
+
+if (NOT OS_NAME MATCHES "OpenBSD")
+    find_library(LIB_BSD bsd REQUIRED)
+    if (LIB_BSD)
+        target_link_options(pl0c PRIVATE ${LIB_BSD})
+    endif()
 endif()
 
 message(STATUS "CMAKE_BUILD_TYPE: '${CMAKE_BUILD_TYPE}'")

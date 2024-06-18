@@ -6,8 +6,8 @@
 
 #ifdef LOGS
 
-    #define COUT(...) fprintf(stderr, __VA_ARGS__)
-    #define CERR(...) fprintf(stdout, __VA_ARGS__)
+    #define COUT(...) fprintf(stdout, __VA_ARGS__)
+    #define CERR(...) fprintf(stderr, __VA_ARGS__)
 
 enum _LOG_SEV
 {

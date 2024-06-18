@@ -23,6 +23,12 @@ TokenHash(StrToken s)
 
 HASHMAP_GEN_CODE(TokenMap, StrToken, TokenHash, TokenCmp, ADT_HASHMAP_DEFAULT_LOAD_FACTOR);
 
+static inline TokenMapReturnNode
+TokenMapSearchValue(TokenMap* self, char* key)
+{
+    return TokenMapSearch(self, (StrToken){.str = key});
+}
+
 #define TOK_IDENT 'I'
 #define TOK_NUMBER 'N'
 #define TOK_CONST 'C'
