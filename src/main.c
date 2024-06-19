@@ -214,6 +214,14 @@ again:
     return 0;
 }
 
+/* Code generator */
+
+static void
+cgEnd(void)
+{
+    COUT("### PL/0 compiler %g\n", PL0C_VERSION);
+}
+
 /* Parser */
 
 static void
@@ -455,6 +463,8 @@ parse(void)
 int
 main(int argc, char* argv[])
 {
+    cgEnd();
+
     char* startp;
 
     if (argc != 2)
