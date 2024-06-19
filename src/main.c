@@ -50,6 +50,13 @@ SymNodeCmp(const SymNode n0, const SymNode n1)
     return strcmp(n0.name, n1.name);
 }
 
+static inline size_t
+SymNodeHash(const SymNode n0)
+{
+    return hashFNV(n0.name);
+}
+
+HASHMAP_GEN_CODE(SymMap, SymNode, SymNodeHash, SymNodeCmp, ADT_HASHMAP_DEFAULT_LOAD_FACTOR);
 LIST_GEN_CODE(SymList, SymNode, SymNodeCmp);
 typedef char* pChar;
 ARRAY_GEN_CODE(ArrStr, pChar);
@@ -60,9 +67,12 @@ char* raw, * token;
 static int type;
 static size_t line = 1;
 static int depth = 0;
+static int proc = 0;
 
+SymMap symmap;
 SymList symtab;
 ArrStr aClean;
+SymList lClean;
 
 static void
 error(const char* fmt, ...)
@@ -79,24 +89,45 @@ error(const char* fmt, ...)
     exit(1);
 }
 
-
 static void
 initSymtab(void)
 {
+    symmap = SymMapCreate(ADT_DEFAULT_SIZE);
     symtab = SymListCreate();
+    lClean = SymListCreate();
     aClean = ArrStrCreate(ADT_DEFAULT_SIZE);
     SymListPushBack(&symtab, (SymNode){.depth = 0, .name = "main", .type = TOK_PROCEDURE});
+    /*SymMapInsert(&symmap, (SymNode){.depth = 0, .name = "main", .type = TOK_PROCEDURE});*/
+}
+
+static void
+destroySymbols(void)
+{
+    LIST_FOREACH_REV_SAFE(&symtab, it, itmp)
+    {
+        if (it->data.type != TOK_PROCEDURE)
+        {
+            free(it->data.name);
+            free(it);
+            itmp->pNext = nullptr;
+            symtab.pLast = itmp;
+        }
+        else
+        {
+            break;
+        }
+    }
 }
 
 static void
 destroySymtab(void)
 {
+    // for (size_t i = 0; i < aClean.size; i++)
+        // free(aClean.pData[i]);
+
+    // ArrStrClean(&aClean);
     SymListClean(&symtab);
-
-    for (size_t i = 0; i < aClean.size; i++)
-        free(aClean.pData[i]);
-
-    ArrStrClean(&aClean);
+    SymMapClean(&symmap);
 }
 
 static void
@@ -118,9 +149,12 @@ addSymbol(int type)
         curr = curr->pNext;
     }
 
+    /*SymMapReturnNode f = SymMapTryInsert(&symmap);*/
+
     char* n = strdup(token);
     ArrStrPush(&aClean, n);
     SymListPushBack(&symtab, (SymNode){.depth = depth - 1, .type = type, .name = n});
+    /*SymMapInsert(&symmap, (SymNode){.depth = depth - 1, .type = type, .name = n});*/
 }
 
 static void
@@ -381,6 +415,44 @@ cgSymbol(void)
     }
 }
 
+static void
+cgCrlf(void)
+{
+    COUT("\n");
+}
+
+static void
+cgVar(void)
+{
+    COUT("long %s;\n", token);
+}
+
+static void
+cgProcedure(void)
+{
+    if (proc == 0)
+    {
+        COUT("int\n");
+        COUT("main(int argc, char* argv[])\n");
+    }
+    else
+    {
+        COUT("void\n");
+        COUT("%s(void)\n", token);
+    }
+
+    COUT("{\n");
+}
+
+static void
+cgEpilogue(void)
+{
+    COUT(";");
+    if (proc == 0)
+        COUT("return 0;");
+    COUT("\n}\n\n");
+}
+
 /* Parser */
 
 static void
@@ -565,7 +637,10 @@ block(void)
     {
         expect(TOK_CONST);
         if (type == TOK_IDENT)
+        {
+            addSymbol(TOK_CONST);
             cgConst();
+        }
         expect(TOK_IDENT);
         expect(TOK_EQUAL);
         if (type == TOK_NUMBER)
@@ -574,12 +649,14 @@ block(void)
             cgSemicolon();
         }
         expect(TOK_NUMBER);
-
         while (type == TOK_COMMA)
         {
             expect(TOK_COMMA);
             if (type == TOK_IDENT)
+            {
+                addSymbol(TOK_CONST);
                 cgConst();
+            }
             expect(TOK_IDENT);
             expect(TOK_EQUAL);
             if (type == TOK_NUMBER)
@@ -595,28 +672,54 @@ block(void)
     if (type == TOK_VAR)
     {
         expect(TOK_VAR);
+        if (type == TOK_IDENT)
+        {
+            addSymbol(TOK_VAR);
+            cgVar();
+        }
         expect(TOK_IDENT);
-
         while (type == TOK_COMMA)
         {
             expect(TOK_COMMA);
+            if (type == TOK_COMMA)
+            {
+                addSymbol(TOK_VAR);
+                cgVar();
+            }
             expect(TOK_IDENT);
         }
         expect(TOK_SEMICOLON);
+        cgCrlf();
     }
 
     while (type == TOK_PROCEDURE)
     {
+        proc = 1;
+
         expect(TOK_PROCEDURE);
+        if (type == TOK_IDENT)
+        {
+            addSymbol(TOK_PROCEDURE);
+            cgProcedure();
+        }
         expect(TOK_IDENT);
         expect(TOK_SEMICOLON);
 
         block();
 
         expect(TOK_SEMICOLON);
+
+        proc = 0;
+
+        destroySymbols();
     }
 
+    if (proc == 0)
+        cgProcedure();
+
     statement();
+
+    cgEpilogue();
 
     if (--depth < 0)
         LOG_FATAL("nesting depth fell below 0");
@@ -653,6 +756,11 @@ main(int argc, char* argv[])
     initSymtab();
 
     parse();
+
+    LIST_FOREACH(&symtab, it)
+    {
+        COUT("%s\n", it->data.name);
+    }
 
     free(startp);
     destroySymtab();
