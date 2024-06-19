@@ -1,5 +1,7 @@
 #include "logs.h"
 #include "token.h"
+#include "adt/list.h"
+#include "adt/array.h"
 
 #include <ctype.h>
 #include <fcntl.h>
@@ -35,12 +37,32 @@
  *		        | "(" expression ")" .
  */
 
+typedef struct SymNode
+{
+    int depth;
+    int type;
+    char* name;
+} SymNode;
+
+static inline int
+SymNodeCmp(const SymNode n0, const SymNode n1)
+{
+    return strcmp(n0.name, n1.name);
+}
+
+LIST_GEN_CODE(SymList, SymNode, SymNodeCmp);
+typedef char* pChar;
+ARRAY_GEN_CODE(ArrStr, pChar);
+
 static void expression(void);
 
 char* raw, * token;
 static int type;
 static size_t line = 1;
 static int depth = 0;
+
+SymList symtab;
+ArrStr aClean;
 
 static void
 error(const char* fmt, ...)
@@ -55,6 +77,50 @@ error(const char* fmt, ...)
 
     CERR("\n");
     exit(1);
+}
+
+
+static void
+initSymtab(void)
+{
+    symtab = SymListCreate();
+    aClean = ArrStrCreate(ADT_DEFAULT_SIZE);
+    SymListPushBack(&symtab, (SymNode){.depth = 0, .name = "main", .type = TOK_PROCEDURE});
+}
+
+static void
+destroySymtab(void)
+{
+    SymListClean(&symtab);
+
+    for (size_t i = 0; i < aClean.size; i++)
+        free(aClean.pData[i]);
+
+    ArrStrClean(&aClean);
+}
+
+static void
+addSymbol(int type)
+{
+    SymListNode* curr;
+
+    curr = symtab.pFirst;
+
+    while (true)
+    {
+        if (!strcmp(curr->data.name, token))
+            if (curr->data.depth == (depth - 1))
+                error("duplicate symbol: %s", token);
+
+        if (!curr->pNext)
+            break;
+
+        curr = curr->pNext;
+    }
+
+    char* n = strdup(token);
+    ArrStrPush(&aClean, n);
+    SymListPushBack(&symtab, (SymNode){.depth = depth - 1, .type = type, .name = n});
 }
 
 static void
@@ -219,7 +285,100 @@ again:
 static void
 cgEnd(void)
 {
-    COUT("### PL/0 compiler %g\n", PL0C_VERSION);
+    COUT("\n/* PL/0 compiler %g */\n", PL0C_VERSION);
+}
+
+static void
+cgConst(void)
+{
+    COUT("const long %s = ", token);
+}
+
+static void
+cgSemicolon(void)
+{
+    COUT(";\n");
+}
+
+static void
+cgSymbol(void)
+{
+    switch (type)
+    {
+        case TOK_IDENT:
+        case TOK_NUMBER:
+            COUT("%s", token);
+            break;
+
+        case TOK_BEGIN:
+            COUT("{\n");
+            break;
+
+        case TOK_END:
+            COUT(";\n}\n");
+            break;
+
+        case TOK_IF:
+            COUT("if(");
+            break;
+
+        case TOK_THEN:
+        case TOK_DO:
+            COUT(")");
+            break;
+
+        case TOK_ODD:
+            COUT("(");
+            break;
+
+        case TOK_WHILE:
+            COUT("while (");
+            break;
+
+        case TOK_EQUAL:
+            COUT("==");
+            break;
+
+        case TOK_COMMA:
+            COUT(",");
+            break;
+
+        case TOK_ASSIGN:
+            COUT("=");
+            break;
+
+        case TOK_HASH:
+            COUT("!=");
+            break;
+
+        case TOK_LESSTHAN:
+            COUT("<");
+            break;
+
+        case TOK_GREATERTHAN:
+            COUT(">");
+            break;
+
+        case TOK_PLUS:
+            COUT("+");
+            break;
+
+        case TOK_MULTIPLY:
+            COUT("*");
+            break;
+
+        case TOK_DIVIDE:
+            COUT("/");
+            break;
+
+        case TOK_LPAREN:
+            COUT("(");
+            break;
+
+        case TOK_RPAREN:
+            COUT(")");
+            break;
+    }
 }
 
 /* Parser */
@@ -230,43 +389,43 @@ next(void)
     type = lex();
     ++raw;
 
-    COUT("(%lu|%s): ", line, tokenStrings[type]);
-    switch (type)
-    {
-        case TOK_IDENT:
-        case TOK_NUMBER:
-        case TOK_CONST:
-        case TOK_VAR:
-        case TOK_PROCEDURE:
-        case TOK_CALL:
-        case TOK_BEGIN:
-        case TOK_END:
-        case TOK_IF:
-        case TOK_THEN:
-        case TOK_WHILE:
-        case TOK_DO:
-        case TOK_ODD:
-            COUT("'%s'", token);
-            break;
-        case TOK_DOT:
-        case TOK_EQUAL:
-        case TOK_COMMA:
-        case TOK_SEMICOLON:
-        case TOK_HASH:
-        case TOK_LESSTHAN:
-        case TOK_GREATERTHAN:
-        case TOK_PLUS:
-        case TOK_MINUS:
-        case TOK_MULTIPLY:
-        case TOK_DIVIDE:
-        case TOK_LPAREN:
-        case TOK_RPAREN:
-            fputc(type, stdout);
-            break;
-        case TOK_ASSIGN:
-            fputs(":=", stdout);
-    }
-    fputc('\n', stdout);
+    /*COUT("(%lu|%s): ", line, tokenStrings[type]);*/
+    /*switch (type)*/
+    /*{*/
+    /*    case TOK_IDENT:*/
+    /*    case TOK_NUMBER:*/
+    /*    case TOK_CONST:*/
+    /*    case TOK_VAR:*/
+    /*    case TOK_PROCEDURE:*/
+    /*    case TOK_CALL:*/
+    /*    case TOK_BEGIN:*/
+    /*    case TOK_END:*/
+    /*    case TOK_IF:*/
+    /*    case TOK_THEN:*/
+    /*    case TOK_WHILE:*/
+    /*    case TOK_DO:*/
+    /*    case TOK_ODD:*/
+    /*        COUT("'%s'", token);*/
+    /*        break;*/
+    /*    case TOK_DOT:*/
+    /*    case TOK_EQUAL:*/
+    /*    case TOK_COMMA:*/
+    /*    case TOK_SEMICOLON:*/
+    /*    case TOK_HASH:*/
+    /*    case TOK_LESSTHAN:*/
+    /*    case TOK_GREATERTHAN:*/
+    /*    case TOK_PLUS:*/
+    /*    case TOK_MINUS:*/
+    /*    case TOK_MULTIPLY:*/
+    /*    case TOK_DIVIDE:*/
+    /*    case TOK_LPAREN:*/
+    /*    case TOK_RPAREN:*/
+    /*        fputc(type, stdout);*/
+    /*        break;*/
+    /*    case TOK_ASSIGN:*/
+    /*        fputs(":=", stdout);*/
+    /*}*/
+    /*fputc('\n', stdout);*/
 }
 
 static void
@@ -405,15 +564,29 @@ block(void)
     if (type == TOK_CONST)
     {
         expect(TOK_CONST);
+        if (type == TOK_IDENT)
+            cgConst();
         expect(TOK_IDENT);
         expect(TOK_EQUAL);
+        if (type == TOK_NUMBER)
+        {
+            cgSymbol();
+            cgSemicolon();
+        }
         expect(TOK_NUMBER);
 
         while (type == TOK_COMMA)
         {
             expect(TOK_COMMA);
+            if (type == TOK_IDENT)
+                cgConst();
             expect(TOK_IDENT);
             expect(TOK_EQUAL);
+            if (type == TOK_NUMBER)
+            {
+                cgSymbol();
+                cgSemicolon();
+            }
             expect(TOK_NUMBER);
         }
         expect(TOK_SEMICOLON);
@@ -458,13 +631,13 @@ parse(void)
 
     if (type != 0)
         error("extra tokens at end of file");
+
+    cgEnd();
 }
 
 int
 main(int argc, char* argv[])
 {
-    cgEnd();
-
     char* startp;
 
     if (argc != 2)
@@ -477,10 +650,12 @@ main(int argc, char* argv[])
     startp = raw;
 
     initTokenHashMap();
+    initSymtab();
 
     parse();
 
     free(startp);
+    destroySymtab();
     destroyTokenHashMap();
 
     return 0;

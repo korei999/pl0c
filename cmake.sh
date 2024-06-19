@@ -71,6 +71,11 @@ _uninstall()
     sudo xargs rm < ./build/install_manifest.txt
 }
 
+_test()
+{
+    ./tests/test.sh
+}
+
 cd $(dirname $0)
 
 case "$1" in
@@ -82,5 +87,6 @@ case "$1" in
     install) _install ;;
     uninstall) _uninstall ;;
     clean) _clean ;;
+    test) _test ;;
     *) build ;;
 esac
