@@ -24,6 +24,11 @@ add_executable(
     "src/token.c"
 )
 
+add_executable(
+    ref
+    "src/ref.c"
+)
+
 if (CMAKE_BUILD_TYPE MATCHES "Asan")
     set(CMAKE_BUILD_TYPE "Debug")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=undefined -fsanitize=address")
@@ -32,6 +37,7 @@ endif()
 
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
     target_compile_options(pl0c PRIVATE -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function)
+    target_compile_options(ref PRIVATE -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function)
 endif()
 
 cmake_host_system_information(RESULT OS_NAME QUERY OS_NAME)
@@ -41,6 +47,7 @@ if (NOT OS_NAME MATCHES "OpenBSD")
     find_library(LIB_BSD bsd REQUIRED)
     if (LIB_BSD)
         target_link_options(pl0c PRIVATE ${LIB_BSD})
+        target_link_options(ref PRIVATE ${LIB_BSD})
     endif()
 endif()
 

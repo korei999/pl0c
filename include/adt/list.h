@@ -5,7 +5,7 @@
 #define LIST_LAST(HEAD) ((HEAD)->pLast)
 #define LIST_NEXT(L) ((L)->pNext)
 #define LIST_PREV(L) ((L)->pPrev)
-#define LIST_FOREACH(L, IT) for (auto (IT) = LIST_FIRST(L); (IT); (IT) = LIST_NEXT(IT))
+#define LIST_FOREACH(L, IT) for (typeof(LIST_FIRST(L)) (IT) = LIST_FIRST(L); (IT); (IT) = LIST_NEXT(IT))
 #define LIST_FOREACH_SAFE(L, IT, TMPIT) for (typeof(LIST_FIRST(L)) (IT) = LIST_FIRST(L), (TMPIT) = NULL; (IT) && ((TMPIT) = LIST_NEXT(IT), true); (IT) = (TMPIT))
 #define LIST_FOREACH_REV_SAFE(L, IT, TMPIT) for (typeof(LIST_LAST(L)) (IT) = LIST_LAST(L), (TMPIT) = NULL; (IT) && ((TMPIT) = LIST_PREV(IT), true); (IT) = (TMPIT))
 

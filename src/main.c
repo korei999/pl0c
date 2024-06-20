@@ -37,6 +37,10 @@
  *		        | "(" expression ")" .
  */
 
+#define CHECK_LHS	0
+#define CHECK_RHS	1
+#define CHECK_CALL	2
+
 typedef struct SymNode
 {
     int depth;
@@ -89,6 +93,48 @@ error(const char* fmt, ...)
     exit(1);
 }
 
+void
+printToken(void)
+{
+    COUT("(%lu|%s): ", line, tokenStrings[type]);
+    switch (type)
+    {
+        case TOK_IDENT:
+        case TOK_NUMBER:
+        case TOK_CONST:
+        case TOK_VAR:
+        case TOK_PROCEDURE:
+        case TOK_CALL:
+        case TOK_BEGIN:
+        case TOK_END:
+        case TOK_IF:
+        case TOK_THEN:
+        case TOK_WHILE:
+        case TOK_DO:
+        case TOK_ODD:
+            COUT("'%s'", token);
+            break;
+        case TOK_DOT:
+        case TOK_EQUAL:
+        case TOK_COMMA:
+        case TOK_SEMICOLON:
+        case TOK_HASH:
+        case TOK_LESSTHAN:
+        case TOK_GREATERTHAN:
+        case TOK_PLUS:
+        case TOK_MINUS:
+        case TOK_MULTIPLY:
+        case TOK_DIVIDE:
+        case TOK_LPAREN:
+        case TOK_RPAREN:
+            fputc(type, stdout);
+            break;
+        case TOK_ASSIGN:
+            fputs(":=", stdout);
+    }
+    fputc('\n', stdout);
+}
+
 static void
 initSymtab(void)
 {
@@ -103,14 +149,14 @@ initSymtab(void)
 static void
 destroySymbols(void)
 {
+    /*COUT("killing: ...\n");*/
     LIST_FOREACH_REV_SAFE(&symtab, it, itmp)
     {
         if (it->data.type != TOK_PROCEDURE)
         {
-            free(it->data.name);
-            free(it);
-            itmp->pNext = nullptr;
-            symtab.pLast = itmp;
+            /*free(it->data.name);*/
+            /*COUT("\t'%s'\n", it->data.name);*/
+            SymListRemove(&symtab, it);
         }
         else
         {
@@ -133,6 +179,8 @@ destroySymtab(void)
 static void
 addSymbol(int type)
 {
+    /*CERR("adding: '%s'\n", token);*/
+
     SymListNode* curr;
 
     curr = symtab.pFirst;
@@ -152,6 +200,7 @@ addSymbol(int type)
     /*SymMapReturnNode f = SymMapTryInsert(&symmap);*/
 
     char* n = strdup(token);
+    /*CERR("added: '%s'\n", n);*/
     ArrStrPush(&aClean, n);
     SymListPushBack(&symtab, (SymNode){.depth = depth - 1, .type = type, .name = n});
     /*SymMapInsert(&symmap, (SymNode){.depth = depth - 1, .type = type, .name = n});*/
@@ -453,6 +502,51 @@ cgEpilogue(void)
     COUT("\n}\n\n");
 }
 
+static void
+cgCall(void)
+{
+    COUT("%s();\n", token);
+}
+
+static void
+cgOdd(void)
+{
+    COUT(")&1");
+}
+
+/* Semantics */
+
+static void
+symCheck(int check)
+{
+    SymListNode* ret = nullptr;
+    
+    LIST_FOREACH(&symtab, it)
+        if (!strcmp(token, it->data.name))
+            ret = it;
+
+    if (ret == nullptr)
+        error("undefined symbol :%s", token);
+
+    switch (check)
+    {
+        case CHECK_LHS:
+            if (ret->data.type != TOK_VAR)
+                error("must be a variable: %s", token);
+            break;
+
+        case CHECK_RHS:
+            if (ret->data.type == TOK_PROCEDURE)
+                error("must not be a procedure: %s", token);
+            break;
+
+        case CHECK_CALL:
+            if (ret->data.type != TOK_PROCEDURE)
+                error("must be a procedure: %s", token);
+            break;
+    }
+}
+
 /* Parser */
 
 static void
@@ -461,43 +555,12 @@ next(void)
     type = lex();
     ++raw;
 
-    /*COUT("(%lu|%s): ", line, tokenStrings[type]);*/
-    /*switch (type)*/
-    /*{*/
-    /*    case TOK_IDENT:*/
-    /*    case TOK_NUMBER:*/
-    /*    case TOK_CONST:*/
-    /*    case TOK_VAR:*/
-    /*    case TOK_PROCEDURE:*/
-    /*    case TOK_CALL:*/
-    /*    case TOK_BEGIN:*/
-    /*    case TOK_END:*/
-    /*    case TOK_IF:*/
-    /*    case TOK_THEN:*/
-    /*    case TOK_WHILE:*/
-    /*    case TOK_DO:*/
-    /*    case TOK_ODD:*/
-    /*        COUT("'%s'", token);*/
-    /*        break;*/
-    /*    case TOK_DOT:*/
-    /*    case TOK_EQUAL:*/
-    /*    case TOK_COMMA:*/
-    /*    case TOK_SEMICOLON:*/
-    /*    case TOK_HASH:*/
-    /*    case TOK_LESSTHAN:*/
-    /*    case TOK_GREATERTHAN:*/
-    /*    case TOK_PLUS:*/
-    /*    case TOK_MINUS:*/
-    /*    case TOK_MULTIPLY:*/
-    /*    case TOK_DIVIDE:*/
-    /*    case TOK_LPAREN:*/
-    /*    case TOK_RPAREN:*/
-    /*        fputc(type, stdout);*/
-    /*        break;*/
-    /*    case TOK_ASSIGN:*/
-    /*        fputs(":=", stdout);*/
-    /*}*/
-    /*fputc('\n', stdout);*/
+    /*COUT("list: ...\n");*/
+    /*LIST_FOREACH(&symtab, it)*/
+    /*    COUT("(%s|%s), ", tokenStrings[it->data.type], it->data.name);*/
+    /*COUT("\n");*/
+
+    /*printToken();*/
 }
 
 static void
@@ -514,13 +577,19 @@ factor(void)
     switch (type)
     {
         case TOK_IDENT:
+            symCheck(CHECK_RHS);
+            [[fallthrough]];
         case TOK_NUMBER:
+            cgSymbol();
             next();
             break;
 
         case TOK_LPAREN:
+            cgSymbol();
             expect(TOK_LPAREN);
             expression();
+            if (type == TOK_RPAREN)
+                cgSymbol();
             expect(TOK_RPAREN);
             break;
     }
@@ -533,6 +602,7 @@ term(void)
 
     while (type == TOK_MULTIPLY || type == TOK_DIVIDE)
     {
+        cgSymbol();
         next();
         factor();
     }
@@ -542,12 +612,16 @@ static void
 expression(void)
 {
     if (type == TOK_PLUS || type == TOK_MINUS)
+    {
+        cgSymbol();
         next();
+    }
 
     term();
 
     while (type == TOK_PLUS || type == TOK_MINUS)
     {
+        cgSymbol();
         next();
         term();
     }
@@ -558,8 +632,10 @@ condition(void)
 {
     if (type == TOK_ODD)
     {
+        cgSymbol();
         expect(TOK_ODD);
         expression();
+        cgOdd();
     }
     else
     {
@@ -571,6 +647,7 @@ condition(void)
             case TOK_HASH:
             case TOK_LESSTHAN:
             case TOK_GREATERTHAN:
+                cgSymbol();
                 next();
                 break;
 
@@ -588,39 +665,56 @@ statement(void)
     switch (type)
     {
         case TOK_IDENT:
+            symCheck(CHECK_LHS);
+            cgSymbol();
             expect(TOK_IDENT);
+            if (type == TOK_ASSIGN)
+                cgSymbol();
             expect(TOK_ASSIGN);
             expression();
             break;
 
         case TOK_CALL:
             expect(TOK_CALL);
+            if (type == TOK_IDENT)
+            {
+                symCheck(CHECK_CALL);
+                cgCall();
+            }
             expect(TOK_IDENT);
             break;
 
         case TOK_BEGIN:
+            cgSymbol();
             expect(TOK_BEGIN);
             statement();
-
             while (type == TOK_SEMICOLON)
             {
+                cgSemicolon();
                 expect(TOK_SEMICOLON);
                 statement();
             }
-
+            if (type == TOK_END)
+                cgSymbol();
             expect(TOK_END);
             break;
 
         case TOK_IF:
+            cgSymbol();
             expect(TOK_IF);
             condition();
+            if (type == TOK_THEN)
+                cgSymbol();
             expect(TOK_THEN);
             statement();
             break;
 
         case TOK_WHILE:
+            cgSymbol();
             expect(TOK_WHILE);
             condition();
+            if (type == TOK_DO)
+                cgSymbol();
             expect(TOK_DO);
             statement();
             break;
@@ -630,7 +724,7 @@ statement(void)
 static void
 block(void)
 {
-    if (depth ++ > 1)
+    if (depth++ > 1)
         error("nesting depth exceeded");
 
     if (type == TOK_CONST)
@@ -681,7 +775,7 @@ block(void)
         while (type == TOK_COMMA)
         {
             expect(TOK_COMMA);
-            if (type == TOK_COMMA)
+            if (type == TOK_IDENT)
             {
                 addSymbol(TOK_VAR);
                 cgVar();
@@ -757,10 +851,8 @@ main(int argc, char* argv[])
 
     parse();
 
-    LIST_FOREACH(&symtab, it)
-    {
-        COUT("%s\n", it->data.name);
-    }
+    /*LIST_FOREACH(&symtab, it)*/
+    /*    COUT("%s\n", it->data.name);*/
 
     free(startp);
     destroySymtab();
