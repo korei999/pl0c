@@ -2,6 +2,7 @@
 #include "token.h"
 #include "adt/list.h"
 #include "adt/array.h"
+#include "strtonum.h"
 
 #include <ctype.h>
 #include <fcntl.h>
@@ -10,11 +11,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#ifdef __linux__
-    #include <bsd/stdlib.h>
-#else
-    #include <stdlib.h>
-#endif
 
 /*
  * pl0c -- PL/0 compiler.
@@ -446,6 +442,10 @@ cgSymbol(void)
             COUT("+");
             break;
 
+        case TOK_MINUS:
+            COUT("-");
+            break;
+
         case TOK_MULTIPLY:
             COUT("*");
             break;
@@ -512,6 +512,46 @@ static void
 cgOdd(void)
 {
     COUT(")&1");
+}
+
+static void
+cgWriteChar(void)
+{
+    COUT("(void)fprintf(stdout, \"%%c\", (unsigned char) %s);", token);
+}
+
+static void
+cgWriteInt(void)
+{
+    COUT("(void)fprintf(stdout, \"%%ld\", (long) %s);", token);
+}
+
+static void
+cgInit(void)
+{
+    COUT("#include <stdio.h>\n");
+    COUT("#include \"include/strtonum.h\"\n");
+    COUT("static char __stdin[24];\n");
+	COUT("static const char *__errstr;\n\n");
+}
+
+static void
+cgReadChar(void)
+{
+    COUT("%s=(unsigned char)fgetc(stdin);", token);
+}
+
+static void
+cgReadInt(void)
+{
+    COUT("(void)fgets(__stdin, ssizeof(__stdin), stdin);\n");
+    COUT("if(__stdin[strlen(__stdin) - 1] == '\\n')");
+    COUT("__stdin[stdlen(__stdin) - 1] = '\\0';");
+    COUT("%s=(long)strtonum(__stdin, LONG_MIN, LONG_MAX, &__errstr);\n", token);
+    COUT("if(__errstr!=NULL){");
+    COUT("(void)fprintf(stderr, \"invalid number: %%s\\n\", __stdin);");
+    COUT("exit(1);");
+    COUT("}");
 }
 
 /* Semantics */
@@ -718,6 +758,67 @@ statement(void)
             expect(TOK_DO);
             statement();
             break;
+
+        case TOK_WRITEINT:
+            expect(TOK_WRITEINT);
+            if (type == TOK_IDENT || type == TOK_NUMBER)
+            {
+                if (type == TOK_IDENT)
+                    symCheck(CHECK_RHS);
+                cgWriteInt();
+            }
+
+            if (type == TOK_IDENT)
+                expect(TOK_IDENT);
+            else if (type == TOK_NUMBER)
+                expect(TOK_NUMBER);
+            else
+                error("writeInt takes an identifier or a number");
+            break;
+
+        case TOK_WRITECHAR:
+            expect(TOK_WRITECHAR);
+            if (type == TOK_IDENT || type == TOK_NUMBER)
+            {
+                if (type == TOK_IDENT)
+                    symCheck(CHECK_RHS);
+                cgWriteChar();
+            }
+
+            if (type == TOK_IDENT)
+                expect(TOK_IDENT);
+            else if (type == TOK_NUMBER)
+                expect(TOK_NUMBER);
+            else
+                error("writeChar takes an identifier or a number");
+            break;
+
+        case TOK_READINT:
+            expect(TOK_READINT);
+            if (type == TOK_INTO)
+                expect(TOK_INTO);
+
+            if (type == TOK_IDENT)
+            {
+                symCheck(CHECK_LHS);
+                cgReadInt();
+            }
+
+            expect(TOK_IDENT);
+            break;
+
+        case TOK_READCHAR:
+            expect(TOK_READCHAR);
+            if (type == TOK_INTO)
+                expect(TOK_INTO);
+
+            if (type == TOK_IDENT)
+            {
+                symCheck(CHECK_LHS);
+                cgReadChar();
+            }
+            expect(TOK_IDENT);
+            break;
     }
 }
 
@@ -822,6 +923,8 @@ block(void)
 static void
 parse(void)
 {
+    cgInit();
+
     next();
     block();
     expect(TOK_DOT);

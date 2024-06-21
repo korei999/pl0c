@@ -56,6 +56,11 @@ TokenMapSearchValue(TokenMap* self, char* key)
 #define TOK_DIVIDE '/'
 #define TOK_LPAREN '('
 #define TOK_RPAREN ')'
+#define TOK_WRITEINT 'w'
+#define TOK_WRITECHAR 'H'
+#define TOK_READINT 'R'
+#define TOK_READCHAR 'h'
+#define TOK_INTO 'n'
 
 extern TokenMap hmTokens;
 
@@ -86,7 +91,12 @@ static const char* tokenStrings[] = {
     [TOK_MULTIPLY] = "MULTIPLY",
     [TOK_DIVIDE] = "DIVIDE",
     [TOK_LPAREN] = "LPAREN",
-    [TOK_RPAREN] = "RPAREN"
+    [TOK_RPAREN] = "RPAREN",
+    [TOK_WRITEINT] = "writeInt",
+    [TOK_WRITECHAR] = "writeChar",
+    [TOK_READINT] = "readInt",
+    [TOK_READCHAR] = "readChar",
+    [TOK_INTO] = "into"
 };
 
 void initTokenHashMap();

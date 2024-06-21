@@ -18,6 +18,11 @@ initTokenHashMap()
     TokenMapInsert(&hmTokens, (StrToken){.str = "while", .token = TOK_WHILE});
     TokenMapInsert(&hmTokens, (StrToken){.str = "do", .token = TOK_DO});
     TokenMapInsert(&hmTokens, (StrToken){.str = "odd", .token = TOK_ODD});
+    TokenMapInsert(&hmTokens, (StrToken){.str = "writeInt", .token = TOK_WRITEINT});
+    TokenMapInsert(&hmTokens, (StrToken){.str = "writeChar", .token = TOK_WRITECHAR});
+    TokenMapInsert(&hmTokens, (StrToken){.str = "readInt", .token = TOK_READINT});
+    TokenMapInsert(&hmTokens, (StrToken){.str = "readChar", .token = TOK_READCHAR});
+    TokenMapInsert(&hmTokens, (StrToken){.str = "into", .token = TOK_INTO});
 }
 
 void
