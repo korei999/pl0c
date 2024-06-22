@@ -84,7 +84,7 @@ error(const char* fmt, ...)
 
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
-    va_start(ap, fmt);
+    va_end(ap);
 
     CERR("\n");
     exit(1);
