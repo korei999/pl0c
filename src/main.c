@@ -531,9 +531,10 @@ static void
 cgInit(void)
 {
     COUT("#include <stdio.h>\n");
-    COUT("#include \"include/strtonum.h\"\n");
+    COUT("#include \"include/strtonum.h\"\n\n");
     COUT("static char __stdin[24];\n");
-	COUT("static const char *__errstr;\n\n");
+	COUT("static const char *__errstr;\n");
+	COUT("static long __writestridx;\n\n");
 }
 
 static void
