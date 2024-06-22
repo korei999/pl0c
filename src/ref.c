@@ -10,8 +10,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define PL0C_VERSION	"1.0.0"
-
 #define CHECK_LHS	0
 #define CHECK_RHS	1
 #define CHECK_CALL	2

@@ -41,6 +41,7 @@ typedef struct SymNode
 {
     int depth;
     int type;
+    long size;
     char* name;
 } SymNode;
 
@@ -554,6 +555,39 @@ cgReadInt(void)
     COUT("}");
 }
 
+static void
+cgArray(void)
+{
+    COUT("[%s]", token);
+}
+
+static void
+cgWriteStr(void)
+{
+    SymListNode* ret = nullptr;
+
+    if (type == TOK_IDENT)
+    {
+        LIST_FOREACH(&symtab, it)
+            if (!strcmp(it->data.name, token))
+                ret = it;
+
+        if (!ret)
+            error("undefined symbol: '%s'", token);
+
+        if (ret->data.size == 0)
+            error("writeStr requires an array");
+
+        COUT("__writestridx = 0;\n");
+        COUT("while(%s[__writestridx]!='\\0'&&__writestridx<%ld)\n", token, ret->data.size);
+        COUT("(void)fputc((unsigned char)%s[__writestridx++],stdout);\n", token);
+    }
+    else
+    {
+        COUT("(void)fprintf(stdout, %s);\n", token);
+    }
+}
+
 /* Semantics */
 
 static void
@@ -587,6 +621,32 @@ symCheck(int check)
     }
 }
 
+static void
+arraySize(void)
+{
+    const char* errstr;
+
+    if (symtab.pLast->data.type != TOK_VAR)
+        error("arrays must be declared with \"var\"");
+
+    symtab.pLast->data.size = strtonum(token, 1, LONG_MAX, &errstr);
+    if (errstr)
+        error("invalid array size");
+}
+
+static void
+arrayCheck(void)
+{
+    SymListNode* ret = nullptr;
+
+    LIST_FOREACH(&symtab, it)
+        if (!strcmp(token, it->data.name))
+            ret = it;
+
+    if (!ret)
+        error("undefined symbol: '%s'", token);
+}
+
 /* Parser */
 
 static void
@@ -618,7 +678,20 @@ factor(void)
     {
         case TOK_IDENT:
             symCheck(CHECK_RHS);
-            [[fallthrough]];
+            cgSymbol();
+            expect(TOK_IDENT);
+            if (type == TOK_LBRACK)
+            {
+                arrayCheck();
+                cgSymbol();
+                expect(TOK_LBRACK);
+                expression();
+                if (type == TOK_LBRACK)
+                    cgSymbol();
+                expect(TOK_RBRACK);
+            }
+            break;
+
         case TOK_NUMBER:
             cgSymbol();
             next();
@@ -708,6 +781,16 @@ statement(void)
             symCheck(CHECK_LHS);
             cgSymbol();
             expect(TOK_IDENT);
+            if (type == TOK_LBRACK)
+            {
+                arrayCheck();
+                cgSymbol();
+                expect(TOK_LBRACK);
+                expression();
+                if (type == TOK_RBRACK)
+                    cgSymbol();
+                expect(TOK_RBRACK);
+            }
             if (type == TOK_ASSIGN)
                 cgSymbol();
             expect(TOK_ASSIGN);
@@ -819,6 +902,25 @@ statement(void)
             }
             expect(TOK_IDENT);
             break;
+
+        case TOK_WRITESTR:
+            expect(TOK_WRITESTR);
+            if (type == TOK_IDENT || type == TOK_STRING)
+            {
+                if (type == TOK_IDENT)
+                    symCheck(CHECK_LHS);
+                cgWriteStr();
+
+                if (type == TOK_IDENT)
+                    expect(TOK_IDENT);
+                else
+                    expect(TOK_STRING);
+            }
+            else
+            {
+                error("writeStr takes an array or a string");
+            }
+            break;
     }
 }
 
@@ -873,6 +975,17 @@ block(void)
             cgVar();
         }
         expect(TOK_IDENT);
+        if (type == TOK_SIZE)
+        {
+            expect(TOK_SIZE);
+            if (type == TOK_NUMBER)
+            {
+                arraySize();
+                cgArray();
+            }
+            expect(TOK_NUMBER);
+        }
+        cgSemicolon();
         while (type == TOK_COMMA)
         {
             expect(TOK_COMMA);
@@ -882,6 +995,13 @@ block(void)
                 cgVar();
             }
             expect(TOK_IDENT);
+            if (type == TOK_SIZE)
+            {
+                arraySize();
+                cgArray();
+                expect(TOK_NUMBER);
+            }
+            cgSemicolon();
         }
         expect(TOK_SEMICOLON);
         cgCrlf();
